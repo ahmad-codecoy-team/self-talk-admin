@@ -1,0 +1,351 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, ArrowLeft, Calendar, Clock, Crown, Shield, ShieldOff } from "lucide-react";
+import { useNavigate, useParams } from "react-router";
+import { toast } from "sonner";
+import adminUsersService from "@/api/services/adminUsersService";
+import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
+import { Badge } from "@/ui/badge";
+import { Button } from "@/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+
+// Base URL for profile pictures (same as in users index)
+const PROFILE_PICTURE_BASE_URL = "https://selftalk-backend-yw3r.onrender.com";
+
+// Avatar background colors for fallbacks (same as in users index)
+const AVATAR_COLORS = [
+	"bg-red-500",
+	"bg-orange-500",
+	"bg-amber-500",
+	"bg-yellow-500",
+	"bg-lime-500",
+	"bg-green-500",
+	"bg-emerald-500",
+	"bg-teal-500",
+	"bg-cyan-500",
+	"bg-sky-500",
+	"bg-blue-500",
+	"bg-indigo-500",
+	"bg-violet-500",
+	"bg-purple-500",
+	"bg-fuchsia-500",
+	"bg-pink-500",
+	"bg-rose-500",
+];
+
+// Helper functions (same as in users index)
+const getProfilePictureUrl = (avatarPath: string | null | undefined) => {
+	if (!avatarPath || avatarPath.trim() === "") {
+		return "";
+	}
+
+	// If the path already includes the base URL, return as is
+	if (avatarPath.startsWith("http") || avatarPath.startsWith("data:")) {
+		return avatarPath;
+	}
+
+	// Remove leading slash if present to avoid double slashes
+	const cleanPath = avatarPath.startsWith("/") ? avatarPath.slice(1) : avatarPath;
+
+	return `${PROFILE_PICTURE_BASE_URL}/${cleanPath}`;
+};
+
+const getAvatarBgColor = (userId: string) => {
+	let hash = 0;
+	for (let i = 0; i < userId.length; i++) {
+		const char = userId.charCodeAt(i);
+		hash = (hash << 5) - hash + char;
+		hash = hash & hash; // Convert to 32bit integer
+	}
+	const index = Math.abs(hash) % AVATAR_COLORS.length;
+	return AVATAR_COLORS[index];
+};
+
+export default function UserDetailPage() {
+	const { userId } = useParams();
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+
+	// Fetch user data using React Query
+	const {
+		data: user,
+		isLoading,
+		error,
+	} = useQuery({
+		queryKey: ["user", userId],
+		queryFn: () => adminUsersService.getUserById(userId || ""),
+		enabled: !!userId,
+	});
+
+	// Toggle user suspension mutation
+	const toggleSuspensionMutation = useMutation({
+		mutationFn: adminUsersService.toggleUserSuspension,
+		onSuccess: (updatedUser) => {
+			// Update the cached user data
+			queryClient.setQueryData(["user", userId], updatedUser);
+			// Also invalidate the users list to keep it in sync
+			queryClient.invalidateQueries({ queryKey: ["users"] });
+
+			const action = updatedUser.status === "Suspended" ? "suspended" : "activated";
+			if (updatedUser.status === "Suspended") {
+				toast.error(`${updatedUser.name} has been ${action}`);
+			} else {
+				toast.success(`${updatedUser.name} has been ${action}`);
+			}
+		},
+		onError: (error: Error) => {
+			toast.error(error.message || "Failed to update user status");
+		},
+	});
+
+	const toggleUserStatus = async () => {
+		if (!user || !userId) return;
+		toggleSuspensionMutation.mutate(userId);
+	};
+
+	const getPlanBadgeVariant = (plan: string) => {
+		switch (plan) {
+			case "Free":
+				return "secondary" as const;
+			case "Premium":
+				return "default" as const;
+			case "Super":
+				return "destructive" as const;
+			default:
+				return "secondary" as const;
+		}
+	};
+
+	const getStatusBadgeVariant = (status: string) => {
+		switch (status) {
+			case "Active":
+				return "default" as const;
+			case "Suspended":
+				return "destructive" as const;
+			default:
+				return "secondary" as const;
+		}
+	};
+
+	// Loading state
+	if (isLoading) {
+		return (
+			<div className="flex items-center justify-center h-screen">
+				<div className="text-center">
+					<div className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent mx-auto mb-4" />
+					<p>Loading user details...</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Error state
+	if (error) {
+		return (
+			<div className="flex items-center justify-center h-screen">
+				<div className="text-center">
+					<p className="text-red-500 mb-4">Failed to load user details</p>
+					<Button onClick={() => navigate("/users")}>Back to Users</Button>
+				</div>
+			</div>
+		);
+	}
+
+	// User not found
+	if (!user) {
+		return (
+			<div className="flex items-center justify-center h-screen">
+				<div className="text-center">
+					<p className="text-muted-foreground mb-4">User not found</p>
+					<Button onClick={() => navigate("/users")}>Back to Users</Button>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="min-h-screen bg-background">
+			<div className="max-w-6xl mx-auto p-6 space-y-8">
+				{/* Header */}
+				<div className="flex items-center justify-between">
+					<Button
+						variant="ghost"
+						onClick={() => navigate("/users")}
+						className="flex items-center gap-2 text-base hover:bg-muted/60"
+					>
+						<ArrowLeft className="h-5 w-5" />
+						Back to Users
+					</Button>
+					<Button
+						variant="outline"
+						onClick={toggleUserStatus}
+						disabled={toggleSuspensionMutation.isPending}
+						className={`flex items-center gap-2 px-6 py-2 font-medium ${
+							user.status === "Active"
+								? "hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+								: "hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+						}`}
+					>
+						{toggleSuspensionMutation.isPending ? (
+							<>
+								<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+								{user.status === "Active" ? "Suspending..." : "Activating..."}
+							</>
+						) : user.status === "Active" ? (
+							<>
+								<ShieldOff className="h-4 w-4" />
+								Suspend User
+							</>
+						) : (
+							<>
+								<Shield className="h-4 w-4" />
+								Activate User
+							</>
+						)}
+					</Button>
+				</div>
+
+				{/* User Profile Section */}
+				<Card>
+					<CardContent className="p-8">
+						<div className="flex items-start gap-8">
+							<div className="flex-shrink-0">
+								<Avatar className="h-32 w-32 ring-4 ring-background shadow-lg">
+									<AvatarImage src={getProfilePictureUrl(user.avatar)} alt={user.name} className="object-cover" />
+									<AvatarFallback className={`text-3xl font-semibold text-white ${getAvatarBgColor(user.id)}`}>
+										{user.name
+											.split(" ")
+											.map((n: string) => n[0])
+											.join("")
+											.toUpperCase()
+											.slice(0, 2)}
+									</AvatarFallback>
+								</Avatar>
+							</div>
+
+							<div className="flex-1 space-y-6">
+								<div>
+									<h1 className="text-3xl font-bold text-foreground mb-2">{user.name}</h1>
+									<p className="text-lg text-muted-foreground mb-4">{user.email}</p>
+									<div className="flex items-center gap-3">
+										<Badge variant={getPlanBadgeVariant(user.plan)} className="px-3 py-1 text-sm font-medium">
+											{user.plan} Plan
+										</Badge>
+										<Badge variant={getStatusBadgeVariant(user.status)} className="px-3 py-1 text-sm font-medium">
+											{user.status}
+										</Badge>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+									<div className="space-y-3">
+										<div className="flex items-center gap-2 text-muted-foreground">
+											<Calendar className="h-4 w-4" />
+											<span className="text-sm font-medium">Member Since</span>
+										</div>
+										<p className="text-xl font-semibold">
+											{new Date(user.joinDate).toLocaleDateString("en-US", {
+												month: "short",
+												year: "numeric",
+											})}
+										</p>
+									</div>
+
+									<div className="space-y-3">
+										<div className="flex items-center gap-2 text-muted-foreground">
+											<Clock className="h-4 w-4" />
+											<span className="text-sm font-medium">Last Active</span>
+										</div>
+										<p className="text-xl font-semibold">
+											{new Date(user.lastActive).toLocaleDateString("en-US", {
+												month: "short",
+												day: "numeric",
+											})}
+										</p>
+									</div>
+
+									<div className="space-y-3">
+										<div className="flex items-center gap-2 text-muted-foreground">
+											<Activity className="h-4 w-4" />
+											<span className="text-sm font-medium">Voice Usage</span>
+										</div>
+										<div className="space-y-2">
+											<p className="text-xl font-semibold">
+												{user.minutesUsed} / {user.minutesTotal} min
+											</p>
+											<div className="w-full bg-muted rounded-full h-2">
+												<div
+													className="bg-primary h-2 rounded-full transition-all duration-300"
+													style={{ width: `${Math.min((user.minutesUsed / user.minutesTotal) * 100, 100)}%` }}
+												/>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+
+				{/* Subscription Details - Always visible for all users */}
+				<Card>
+					<CardHeader className="pb-4">
+						<CardTitle className="flex items-center gap-2 text-xl">
+							<Crown className="h-5 w-5 text-primary" />
+							Subscription Details
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="pt-0">
+						<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+							<div className="space-y-3">
+								<p className="text-sm font-medium text-muted-foreground">Plan</p>
+								<p className="text-lg font-semibold">
+									{user.subscription.packageSnapshot.name === "Free" ? "FREE" : user.subscription.packageSnapshot.name}
+								</p>
+							</div>
+
+							<div className="space-y-3">
+								<p className="text-sm font-medium text-muted-foreground">Monthly Cost</p>
+								<p className="text-lg font-semibold">
+									{user.subscription.packageSnapshot.price === 0
+										? "€0,00"
+										: `€${user.subscription.packageSnapshot.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+								</p>
+							</div>
+
+							<div className="space-y-3">
+								<p className="text-sm font-medium text-muted-foreground">Next Billing</p>
+								<p className="text-lg font-semibold">
+									{user.subscription.nextBillingDate
+										? new Date(user.subscription.nextBillingDate).toLocaleDateString("en-US", {
+												month: "short",
+												day: "numeric",
+												year: "numeric",
+											})
+										: "N/A"}
+								</p>
+							</div>
+
+							<div className="space-y-3">
+								<p className="text-sm font-medium text-muted-foreground">Payment Method</p>
+								<div className="space-y-1">
+									<p className="text-lg font-semibold">
+										{user.subscription.paymentMethod
+											? `${user.subscription.paymentMethod.brand.charAt(0).toUpperCase() + user.subscription.paymentMethod.brand.slice(1)} •••• ${user.subscription.paymentMethod.last4}`
+											: "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										{user.subscription.packageSnapshot.name === "Free"
+											? "No billing required"
+											: user.subscription.autoRenew
+												? "Auto-renew enabled"
+												: "Auto-renew disabled"}
+									</p>
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+		</div>
+	);
+}

@@ -1,0 +1,371 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, Edit, Loader2, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { FAQ } from "#/entity";
+import faqService, { type CreateFAQReq, type UpdateFAQReq } from "@/api/services/faqService";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Input } from "@/ui/input";
+import { Label } from "@/ui/label";
+import { Textarea } from "@/ui/textarea";
+
+export default function FAQPage() {
+	const queryClient = useQueryClient();
+	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedCategory, setSelectedCategory] = useState("All");
+	const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+	const [editingFaq, setEditingFaq] = useState<FAQ | null>(null);
+	const [deletingFaq, setDeletingFaq] = useState<FAQ | null>(null);
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [formData, setFormData] = useState<{
+		question: string;
+		answer: string;
+		category: "General" | "Account" | "Billing" | "Features" | "Technical";
+	}>({
+		question: "",
+		answer: "",
+		category: "General",
+	});
+
+	const categories = ["All", "General", "Account", "Billing", "Features", "Technical"] as const;
+
+	// Fetch FAQs
+	const { data: faqs = [], isLoading } = useQuery({
+		queryKey: ["faqs", selectedCategory === "All" ? undefined : selectedCategory],
+		queryFn: () => faqService.getFAQs(selectedCategory === "All" ? undefined : selectedCategory),
+	});
+
+	// Filter FAQs based on search query
+	const filteredFaqs = faqs.filter((faq) => {
+		if (searchQuery) {
+			return (
+				faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
+			);
+		}
+		return true;
+	});
+
+	// Create FAQ mutation
+	const createFaqMutation = useMutation({
+		mutationFn: (data: CreateFAQReq) => faqService.createFAQ(data),
+		onSuccess: () => {
+			toast.success("FAQ created successfully");
+			queryClient.invalidateQueries({ queryKey: ["faqs"] });
+			handleDialogClose();
+		},
+		onError: () => {
+			toast.error("Failed to create FAQ");
+		},
+	});
+
+	// Update FAQ mutation
+	const updateFaqMutation = useMutation({
+		mutationFn: ({ id, data }: { id: string; data: UpdateFAQReq }) => faqService.updateFAQ(id, data),
+		onSuccess: () => {
+			toast.success("FAQ updated successfully");
+			queryClient.invalidateQueries({ queryKey: ["faqs"] });
+			handleDialogClose();
+		},
+		onError: () => {
+			toast.error("Failed to update FAQ");
+		},
+	});
+
+	// Delete FAQ mutation
+	const deleteFaqMutation = useMutation({
+		mutationFn: (id: string) => faqService.deleteFAQ(id),
+		onSuccess: () => {
+			toast.success("FAQ deleted successfully");
+			queryClient.invalidateQueries({ queryKey: ["faqs"] });
+			setIsDeleteDialogOpen(false);
+			setDeletingFaq(null);
+		},
+		onError: () => {
+			toast.error("Failed to delete FAQ");
+		},
+	});
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+
+		if (!formData.question.trim() || !formData.answer.trim()) {
+			toast.error("Please fill in all fields");
+			return;
+		}
+
+		if (editingFaq) {
+			updateFaqMutation.mutate({
+				id: editingFaq._id,
+				data: formData,
+			});
+		} else {
+			createFaqMutation.mutate(formData);
+		}
+	};
+
+	const handleEdit = (faq: FAQ) => {
+		setEditingFaq(faq);
+		setFormData({
+			question: faq.question,
+			answer: faq.answer,
+			category: faq.category,
+		});
+		setIsCreateDialogOpen(true);
+	};
+
+	const handleDeleteClick = (faq: FAQ) => {
+		setDeletingFaq(faq);
+		setIsDeleteDialogOpen(true);
+	};
+
+	const handleDeleteConfirm = () => {
+		if (!deletingFaq) return;
+		deleteFaqMutation.mutate(deletingFaq._id);
+	};
+
+	const handleDeleteCancel = () => {
+		setIsDeleteDialogOpen(false);
+		setDeletingFaq(null);
+	};
+
+	const toggleExpanded = (id: string) => {
+		const newExpanded = new Set(expandedItems);
+		if (newExpanded.has(id)) {
+			newExpanded.delete(id);
+		} else {
+			newExpanded.add(id);
+		}
+		setExpandedItems(newExpanded);
+	};
+
+	const handleDialogClose = () => {
+		setIsCreateDialogOpen(false);
+		setEditingFaq(null);
+		setFormData({ question: "", answer: "", category: "General" });
+	};
+
+	return (
+		<div className="min-h-screen overflow-y-auto">
+			{/* Mobile Header */}
+			<div className="md:hidden p-4 border-b bg-background">
+				<div className="flex items-center justify-between">
+					<h1 className="text-xl font-semibold">FAQ Management</h1>
+				</div>
+			</div>
+
+			{/* Main Content */}
+			<div className="p-6">
+				<div className="flex justify-between items-center mb-6">
+					<div className="hidden md:block">
+						<h2 className="text-lg font-medium">FAQ Management</h2>
+						<p className="text-sm text-muted-foreground">Manage frequently asked questions and their answers</p>
+					</div>
+					<div className="w-full md:w-auto">
+						<Button className="w-full md:w-auto" onClick={() => setIsCreateDialogOpen(true)} disabled={isLoading}>
+							{isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+							Add FAQ
+						</Button>
+
+						<Dialog open={isCreateDialogOpen} onOpenChange={handleDialogClose}>
+							<DialogContent className="max-w-2xl">
+								<DialogHeader>
+									<DialogTitle>{editingFaq ? "Edit FAQ" : "Create New FAQ"}</DialogTitle>
+								</DialogHeader>
+								<form onSubmit={handleSubmit} className="space-y-4">
+									<div className="space-y-2">
+										<Label htmlFor="category">Category</Label>
+										<select
+											id="category"
+											value={formData.category}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													category: e.target.value as "General" | "Account" | "Billing" | "Features" | "Technical",
+												})
+											}
+											className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+										>
+											{categories.slice(1).map((category) => (
+												<option key={category} value={category}>
+													{category}
+												</option>
+											))}
+										</select>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="question">Question</Label>
+										<Input
+											id="question"
+											value={formData.question}
+											onChange={(e) => setFormData({ ...formData, question: e.target.value })}
+											placeholder="Enter the question"
+											required
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="answer">Answer</Label>
+										<Textarea
+											id="answer"
+											value={formData.answer}
+											onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
+											placeholder="Enter the answer"
+											rows={4}
+											required
+										/>
+									</div>
+									<div className="flex justify-end space-x-2">
+										<Button type="button" variant="outline" onClick={handleDialogClose}>
+											Cancel
+										</Button>
+										<Button type="submit" disabled={createFaqMutation.isPending || updateFaqMutation.isPending}>
+											{(createFaqMutation.isPending || updateFaqMutation.isPending) && (
+												<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+											)}
+											{editingFaq ? "Update FAQ" : "Create FAQ"}
+										</Button>
+									</div>
+								</form>
+							</DialogContent>
+						</Dialog>
+					</div>
+				</div>
+
+				{/* Filters */}
+				<div className="flex flex-col sm:flex-row gap-4 mb-6">
+					<div className="relative flex-1">
+						<Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+						<Input
+							placeholder="Search FAQs..."
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							className="pl-10"
+						/>
+					</div>
+					<div className="w-full sm:w-48">
+						<select
+							value={selectedCategory}
+							onChange={(e) => setSelectedCategory(e.target.value)}
+							className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						>
+							{categories.map((category) => (
+								<option key={category} value={category}>
+									{category}
+								</option>
+							))}
+						</select>
+					</div>
+				</div>
+
+				{/* FAQ List */}
+				<div className="space-y-4">
+					{isLoading ? (
+						<Card>
+							<CardContent className="p-12 text-center">
+								<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+								<p className="text-muted-foreground">Loading FAQs...</p>
+							</CardContent>
+						</Card>
+					) : filteredFaqs.length === 0 ? (
+						<Card>
+							<CardContent className="p-12 text-center">
+								<p className="text-muted-foreground">No FAQs found</p>
+								<p className="text-sm text-muted-foreground mt-1">
+									{faqs.length === 0 ? "Create your first FAQ to get started" : "Try adjusting your search or filters"}
+								</p>
+							</CardContent>
+						</Card>
+					) : (
+						filteredFaqs.map((faq) => (
+							<Card key={faq._id}>
+								<CardContent className="p-4">
+									<div className="flex items-start justify-between">
+										<div className="flex-1">
+											<div className="flex items-center cursor-pointer group" onClick={() => toggleExpanded(faq._id)}>
+												{expandedItems.has(faq._id) ? (
+													<ChevronDown className="h-4 w-4 mr-2 text-muted-foreground" />
+												) : (
+													<ChevronRight className="h-4 w-4 mr-2 text-muted-foreground" />
+												)}
+												<div className="flex-1">
+													<div className="flex items-center gap-2 mb-1">
+														<span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-medium">
+															{faq.category}
+														</span>
+													</div>
+													<h3 className="font-medium group-hover:text-primary transition-colors">{faq.question}</h3>
+												</div>
+											</div>
+
+											{expandedItems.has(faq._id) && (
+												<div className="mt-4 ml-6 pr-12">
+													<p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+														{faq.answer}
+													</p>
+													<p className="text-xs text-muted-foreground mt-3">
+														Created: {new Date(faq.createdAt || "").toLocaleDateString()}
+													</p>
+												</div>
+											)}
+										</div>
+
+										<div className="flex items-center gap-1 ml-4">
+											<Button variant="ghost" size="sm" onClick={() => handleEdit(faq)} className="h-8 w-8 p-0">
+												<Edit className="h-4 w-4" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleDeleteClick(faq)}
+												className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+												disabled={deleteFaqMutation.isPending}
+											>
+												{deleteFaqMutation.isPending && deletingFaq?._id === faq._id ? (
+													<Loader2 className="h-4 w-4 animate-spin" />
+												) : (
+													<Trash2 className="h-4 w-4" />
+												)}
+											</Button>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						))
+					)}
+				</div>
+
+				{/* Delete Confirmation Dialog */}
+				<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+					<DialogContent className="max-w-md">
+						<DialogHeader>
+							<DialogTitle>Delete FAQ</DialogTitle>
+						</DialogHeader>
+						<div className="py-4">
+							<p className="text-sm text-muted-foreground mb-4">
+								Are you sure you want to delete this FAQ? This action cannot be undone.
+							</p>
+							{deletingFaq && (
+								<div className="p-3 bg-muted rounded-md">
+									<p className="font-medium text-sm">{deletingFaq.question}</p>
+									<p className="text-xs text-muted-foreground mt-1">Category: {deletingFaq.category}</p>
+								</div>
+							)}
+						</div>
+						<div className="flex justify-end space-x-2">
+							<Button variant="outline" onClick={handleDeleteCancel}>
+								Cancel
+							</Button>
+							<Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleteFaqMutation.isPending}>
+								{deleteFaqMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+								Delete FAQ
+							</Button>
+						</div>
+					</DialogContent>
+				</Dialog>
+			</div>
+		</div>
+	);
+}
