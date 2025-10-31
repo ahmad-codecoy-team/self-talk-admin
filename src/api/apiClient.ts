@@ -28,10 +28,17 @@ axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<any>) => {
 		if (!res.data) throw new Error(t("sys.api.apiRequestFailed"));
 
-		// Handle new SelfTalk API format { success, statusCode, message, data }
+		// Handle new SelfTalk API format { success, statusCode, message, data, meta? }
 		if (typeof res.data.success === "boolean") {
-			const { success, data, message } = res.data;
+			const { success, data, message, meta } = res.data as any;
 			if (success) {
+				// Preserve pagination meta if present by merging it alongside data
+				if (typeof meta !== "undefined") {
+					if (data && typeof data === "object") {
+						return { ...data, meta } as any;
+					}
+					return { data, meta } as any;
+				}
 				return data;
 			}
 			throw new Error(message || t("sys.api.apiRequestFailed"));

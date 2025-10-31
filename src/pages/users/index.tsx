@@ -201,7 +201,7 @@ const UserRow = memo(
 						<div className="w-full bg-muted rounded-full h-1.5">
 							<div
 								className="bg-primary h-1.5 rounded-full transition-all duration-300"
-								style={{ width: `${Math.min((user.minutesUsed / user.minutesTotal) * 100, 100)}%` }}
+								style={{ width: `${user.minutesTotal > 0 ? Math.min((user.minutesUsed / user.minutesTotal) * 100, 100) : 0}%` }}
 							/>
 						</div>
 					</div>
@@ -375,9 +375,9 @@ export default function UsersPage() {
 		[toggleSuspensionMutation],
 	);
 
-	const totalRevenue = users
-		.filter((u) => u.subscription && u.subscription.packageSnapshot.price > 0)
-		.reduce((sum, u) => sum + u.subscription.packageSnapshot.price, 0);
+const totalRevenue = users
+		.filter((u) => u.subscription && u.subscription.packageSnapshot.price > 0 && u.status === "Active")
+		.reduce((sum, u) => sum + (u.subscription?.packageSnapshot.price || 0), 0);
 
 	// Show loading state
 	if (isLoading) {

@@ -141,32 +141,11 @@ export default function DashboardPage() {
 			}
 		});
 
-		// Top 5 users by usage
-		const sortedUsers = users
-			.filter(user => user.minutesUsed > 0)
-			.sort((a, b) => b.minutesUsed - a.minutesUsed)
-			.slice(0, 5);
+// Top 5 users by usage (highest minutes used first)
+		const sortedUsersByUsage = [...users].sort((a, b) => (b.minutesUsed || 0) - (a.minutesUsed || 0));
+		const topFive = sortedUsersByUsage.slice(0, 5);
 
-		// If less than 5 users with usage, fill with users who have minutes allocated
-		const remainingSlots = 5 - sortedUsers.length;
-		if (remainingSlots > 0) {
-			const usersWithMinutes = users
-				.filter(user => user.minutesUsed === 0 && user.minutesTotal > 0)
-				.slice(0, remainingSlots);
-			sortedUsers.push(...usersWithMinutes);
-		}
-
-		// If still less than 5, fill with any remaining users
-		const finalRemainingSlots = 5 - sortedUsers.length;
-		if (finalRemainingSlots > 0) {
-			const existingIds = new Set(sortedUsers.map(u => u.id));
-			const anyRemainingUsers = users
-				.filter(user => !existingIds.has(user.id))
-				.slice(0, finalRemainingSlots);
-			sortedUsers.push(...anyRemainingUsers);
-		}
-
-		const topUsersFormatted: TopUser[] = sortedUsers.map(user => ({
+		const topUsersFormatted: TopUser[] = topFive.map(user => ({
 			id: user.id,
 			name: user.name,
 			email: user.email,

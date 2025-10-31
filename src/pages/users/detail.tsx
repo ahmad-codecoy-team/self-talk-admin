@@ -275,7 +275,7 @@ export default function UserDetailPage() {
 											<div className="w-full bg-muted rounded-full h-2">
 												<div
 													className="bg-primary h-2 rounded-full transition-all duration-300"
-													style={{ width: `${Math.min((user.minutesUsed / user.minutesTotal) * 100, 100)}%` }}
+style={{ width: `${user.minutesTotal > 0 ? Math.min((user.minutesUsed / user.minutesTotal) * 100, 100) : 0}%` }}
 												/>
 											</div>
 										</div>

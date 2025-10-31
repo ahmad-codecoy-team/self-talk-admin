@@ -21,11 +21,6 @@ export const frontendNavData: NavProps["data"] = [
 				icon: <Icon icon="lucide:users" size="24" />,
 			},
 			{
-				title: "Packages",
-				path: "/packages",
-				icon: <Icon icon="lucide:package" size="24" />,
-			},
-			{
 				title: "Notifications",
 				path: "/notifications",
 				icon: <Icon icon="solar:bell-bold-duotone" size="24" />,

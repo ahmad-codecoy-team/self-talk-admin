@@ -8,15 +8,22 @@ export interface ApiUser {
 	profilePicture: string;
 	voice_id: string | null;
 	model_id: string | null;
-	total_minutes: number;
-	available_minutes: number;
 	current_subscription: {
 		_id: string;
 		name: string;
+		status: string;
 		price: number;
 		billing_period: string;
+		currency?: string;
+		total_minutes: number; // plan minutes + extra_minutes
+		available_minutes: number; // combined available (plan + extra)
+		extra_minutes: number;
+		recordings?: string[];
+		subscription_started_at?: string;
+		subscription_end_date?: string | null;
+		createdAt?: string;
+		updatedAt?: string;
 	} | null;
-	subscription_started_at: string | null;
 	role: {
 		_id: string;
 		name: string;
@@ -119,10 +126,40 @@ const AVATAR_COLORS = [
 	"#f43f5e",
 ];
 
+// Utilities to coerce numbers and infer plan minutes when backend omits totals
+const toNum = (v: unknown): number | undefined => {
+	const n = typeof v === "string" ? Number(v) : (typeof v === "number" ? v : undefined);
+	return Number.isFinite(n as number) ? (n as number) : undefined;
+};
+
+const inferPlanMinutes = (planName: string | undefined): number | undefined => {
+	switch ((planName || "").toLowerCase()) {
+		case "free":
+			return 2;
+		case "premium":
+			return 200;
+		case "super":
+			return 500;
+		default:
+			return undefined;
+	}
+};
+
 // Transform API user to frontend user format
 export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser => {
-	// Calculate minutes used from total and available
-	const minutesUsed = apiUser.total_minutes - apiUser.available_minutes;
+	// Safely read subscription minutes with sensible fallbacks (Free plan defaults to 2 total minutes)
+	const planName = apiUser.current_subscription?.name || "Free";
+	// Read minutes from new shape (current_subscription) with backward/alt-shape fallback to root-level
+	const totalRaw = apiUser.current_subscription?.total_minutes ?? (apiUser as any).total_minutes;
+	const availableRaw = apiUser.current_subscription?.available_minutes ?? (apiUser as any).available_minutes;
+	let total = toNum(totalRaw);
+	let available = toNum(availableRaw);
+
+	// If totals are missing, try to infer by plan name (doc: Free=2, Premium=200, Super=500)
+	if (total === undefined) total = inferPlanMinutes(planName);
+	if (available === undefined) available = total; // assume full available if missing
+
+	const minutesUsed = Math.max((total ?? 0) - (available ?? 0), 0);
 
 	// Generate avatar with user initials and random color
 	const initials = apiUser.username
@@ -139,14 +176,14 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 	const avatar =
 		apiUser.profilePicture ||
 		`data:image/svg+xml,${encodeURIComponent(`
-			<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-				<rect width="40" height="40" fill="${avatarColor}"/>
-				<text x="20" y="26" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">${initials}</text>
+			<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\" viewBox=\"0 0 40 40\">
+				<rect width=\"40\" height=\"40\" fill=\"${avatarColor}\"/>
+				<text x=\"20\" y=\"26\" text-anchor=\"middle\" fill=\"white\" font-family=\"Arial, sans-serif\" font-size=\"14\" font-weight=\"bold\">${initials}</text>
 			</svg>
 		`)}`;
 
 	// Determine plan name and subscription details
-	const planName = apiUser.current_subscription?.name || "Free";
+	// planName already computed above
 	const planPrice = apiUser.current_subscription?.price || 0;
 
 	// Status mapping
@@ -156,15 +193,10 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 	const joinDate = new Date(apiUser.createdAt).toISOString().split("T")[0];
 	const lastActive = new Date(apiUser.updatedAt).toISOString().split("T")[0];
 
-	// Static payment method for now (to be implemented later)
-	const paymentMethod =
-		planPrice > 0
-			? {
-					type: "card",
-					last4: "4242",
-					brand: "visa",
-				}
-			: null;
+	// Static payment method for now
+	const paymentMethod = planPrice > 0
+		? { type: "card", last4: "4242", brand: "visa" }
+		: null;
 
 	// Create subscription data
 	const subscription = {
@@ -174,20 +206,21 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 		packageSnapshot: {
 			name: planName,
 			price: planPrice,
-			voiceMinutes: apiUser.total_minutes,
+			voiceMinutes: total ?? 0,
 			billingCycle: apiUser.current_subscription?.billing_period || "monthly",
 		},
 		status: planName === "Free" ? "free" : status === "Active" ? "active" : "cancelled",
-		startDate: apiUser.subscription_started_at
-			? new Date(apiUser.subscription_started_at).toISOString().split("T")[0]
-			: joinDate,
-		endDate: null, // Will be calculated based on billing cycle later
+		startDate:
+			(apiUser.current_subscription?.subscription_started_at || apiUser.createdAt)
+				? new Date(apiUser.current_subscription?.subscription_started_at || apiUser.createdAt).toISOString().split("T")[0]
+				: joinDate,
+		endDate: apiUser.current_subscription?.subscription_end_date || null,
 		nextBillingDate:
 			planName === "Free" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
 		paymentMethod,
 		autoRenew: planName !== "Free" && status === "Active",
-		createdAt: apiUser.subscription_started_at || apiUser.createdAt,
-		updatedAt: apiUser.updatedAt,
+		createdAt: apiUser.current_subscription?.createdAt || apiUser.createdAt,
+		updatedAt: apiUser.current_subscription?.updatedAt || apiUser.updatedAt,
 	};
 
 	return {
@@ -201,7 +234,7 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 		joinDate,
 		lastActive,
 		minutesUsed,
-		minutesTotal: apiUser.total_minutes,
+		minutesTotal: total ?? 0,
 		subscription,
 	};
 };
