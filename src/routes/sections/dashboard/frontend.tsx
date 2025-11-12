@@ -21,6 +21,12 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		// FAQ
 		{ path: "faq", element: Component("/pages/faq") },
 
+		// Customer Support
+		{ path: "customer-support", element: Component("/pages/customer-support") },
+
+		// Global Prompt
+		{ path: "global-prompt", element: Component("/pages/global-prompt") },
+
 		// Reusable components showcase (kept for development reference)
 		{
 			path: "components",

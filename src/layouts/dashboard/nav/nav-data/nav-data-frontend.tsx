@@ -21,6 +21,11 @@ export const frontendNavData: NavProps["data"] = [
 				icon: <Icon icon="lucide:users" size="24" />,
 			},
 			{
+				title: "Global Prompt",
+				path: "/global-prompt",
+				icon: <Icon icon="lucide:message-square" size="24" />,
+			},
+			{
 				title: "Notifications",
 				path: "/notifications",
 				icon: <Icon icon="solar:bell-bold-duotone" size="24" />,
@@ -49,6 +54,11 @@ export const frontendNavData: NavProps["data"] = [
 				title: "FAQ",
 				path: "/faq",
 				icon: <Icon icon="lucide:help-circle" size="24" />,
+			},
+			{
+				title: "Customer Support",
+				path: "/customer-support",
+				icon: <Icon icon="lucide:headphones" size="24" />,
 			},
 		],
 	},
