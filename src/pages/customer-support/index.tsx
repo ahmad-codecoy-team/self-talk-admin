@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Mail, Search, Users, ChevronLeft, ChevronRight } from "lucide-react";
-import { memo, useState, useMemo } from "react";
+import { ChevronLeft, ChevronRight, Mail, Search, Users } from "lucide-react";
+import { memo, useMemo, useState } from "react";
 import supportService, { type SupportRequest } from "@/api/services/supportService";
 import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
 import { Button } from "@/ui/button";
@@ -62,6 +62,45 @@ const getAvatarBgColor = (userId: string) => {
 	return AVATAR_COLORS[index];
 };
 
+// Expandable Message Component
+const ExpandableMessage = memo(
+	({ message, maxLength = 100, className = "" }: { message: string; maxLength?: number; className?: string }) => {
+		const [isExpanded, setIsExpanded] = useState(false);
+
+		if (message.length <= maxLength) {
+			return <p className={`text-sm text-foreground break-words ${className}`}>{message}</p>;
+		}
+
+		return (
+			<p className={`text-sm text-foreground break-words ${className}`}>
+				{isExpanded ? (
+					<>
+						{message}{" "}
+						<span
+							className="text-yellow-600 cursor-pointer hover:text-yellow-700 text-sm"
+							onClick={() => setIsExpanded(false)}
+						>
+							show less
+						</span>
+					</>
+				) : (
+					<>
+						{message.slice(0, maxLength)}{" "}
+						<span
+							className="text-yellow-600 cursor-pointer hover:text-yellow-700 text-sm"
+							onClick={() => setIsExpanded(true)}
+						>
+							see more...
+						</span>
+					</>
+				)}
+			</p>
+		);
+	},
+);
+
+ExpandableMessage.displayName = "ExpandableMessage";
+
 // Mobile-optimized SupportCard component
 const SupportCard = memo(
 	({ supportRequest, onSendEmail }: { supportRequest: SupportRequest; onSendEmail: (email: string) => void }) => {
@@ -94,7 +133,7 @@ const SupportCard = memo(
 					{/* Message */}
 					<div className="space-y-2">
 						<p className="text-xs font-medium text-muted-foreground">Message:</p>
-						<p className="text-sm text-foreground line-clamp-3 break-words">{supportRequest.message}</p>
+						<ExpandableMessage message={supportRequest.message} maxLength={150} />
 					</div>
 
 					{/* Actions */}
@@ -157,7 +196,7 @@ const SupportRow = memo(
 				{/* Message Column */}
 				<td className="py-6 px-6">
 					<div className="max-w-md">
-						<p className="text-sm text-foreground line-clamp-2 break-words">{supportRequest.message}</p>
+						<ExpandableMessage message={supportRequest.message} maxLength={100} />
 					</div>
 				</td>
 
@@ -319,14 +358,22 @@ export default function CustomerSupportPage() {
 
 	// Handle sending email
 	const handleSendEmail = (email: string) => {
-		const subject = encodeURIComponent("Support Response - SelfTalk");
-		const body = encodeURIComponent(
-			"Dear Customer,\n\nThank you for contacting our support team.\n\nBest regards,\nSelfTalk Support Team",
-		);
-		const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
-		
-		// Use window.location.href for better compatibility across browsers and platforms
-		window.location.href = mailtoUrl;
+		// const subject = encodeURIComponent("Support Response - SelfTalk");
+		// const body = encodeURIComponent(
+		// 	"Dear Customer,\n\nThank you for contacting our support team.\n\nBest regards,\nSelfTalk Support Team",
+		// );
+		// const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+
+		// // Simple and reliable method for mailto links
+		// window.location.href = mailtoUrl;
+		const subject = "Support Response - SelfTalk";
+		const body = "Dear Customer,\n\nThank you for contacting our support team.\n\nBest regards,\nSelfTalk Support Team";
+
+		const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+			email,
+		)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+		window.open(gmailUrl, "_blank", "noopener,noreferrer");
 	};
 
 	// Show loading state
