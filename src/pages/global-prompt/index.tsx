@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Textarea } from "@/ui/textarea";
 import { Separator } from "@/ui/separator";
 import { Badge } from "@/ui/badge";
+import { ScrollArea } from "@/ui/scroll-area";
 
 // React Query keys
 const QUERY_KEYS = {
@@ -196,7 +197,7 @@ export default function GlobalPromptPage() {
 
 			{/* Main Content */}
 			<div className="flex-1 flex flex-col min-h-0 mx-6 mb-6">
-				<Card className="flex-1 flex flex-col min-h-0">
+				<Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
 					<CardHeader className="flex-shrink-0 pb-4">
 						<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
 							<CardTitle className="text-lg font-medium">
@@ -238,18 +239,20 @@ export default function GlobalPromptPage() {
 						</div>
 					</CardHeader>
 					<Separator />
-					<CardContent className="flex-1 min-h-0 p-6 flex flex-col">
+					<CardContent className="flex-1 min-h-0 p-0 flex flex-col overflow-hidden">
 						{!isEditing ? (
 							// Display Mode
-							<div className="flex-1 flex flex-col">
+							<div className="flex-1 flex flex-col min-h-0 p-6">
 								{promptText ? (
-									<div className="space-y-4">
-										<div className="p-4 bg-muted/30 rounded-lg border">
-											<pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-												{promptText}
-											</pre>
+									<div className="flex-1 flex flex-col space-y-4 min-h-0">
+										<div className="flex-1 p-4 bg-muted/30 rounded-lg border overflow-hidden">
+											<ScrollArea className="h-full">
+												<pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed pr-4">
+													{promptText}
+												</pre>
+											</ScrollArea>
 										</div>
-										<div className="text-xs text-muted-foreground">
+										<div className="flex-shrink-0 text-xs text-muted-foreground">
 											Character count: {promptText.length}
 										</div>
 									</div>
@@ -272,23 +275,27 @@ export default function GlobalPromptPage() {
 							</div>
 						) : (
 							// Edit Mode
-							<div className="flex-1 flex flex-col space-y-4">
-								<Textarea
-									value={promptText}
-									onChange={(e) => setPromptText(e.target.value)}
-									placeholder="Enter your global AI assistant prompt here..."
-									className="flex-1 min-h-[300px] resize-none font-mono text-sm leading-relaxed"
-									autoFocus
-								/>
-								<div className="flex justify-between items-center text-xs text-muted-foreground">
-									<div>
-										Character count: {promptText.length}
+							<div className="flex-1 flex flex-col min-h-0 p-6">
+								<div className="flex-1 flex flex-col space-y-4 min-h-0">
+									<div className="flex-1 min-h-0 relative">
+										<Textarea
+											value={promptText}
+											onChange={(e) => setPromptText(e.target.value)}
+											placeholder="Enter your global AI assistant prompt here..."
+											className="absolute inset-0 w-full h-full resize-none font-mono text-sm leading-relaxed border rounded-md p-3 focus:ring-2 focus:ring-primary focus:border-transparent overflow-auto"
+											autoFocus
+										/>
 									</div>
-									{hasChanges && (
-										<div className="text-amber-600">
-											Unsaved changes
+									<div className="flex-shrink-0 flex justify-between items-center text-xs text-muted-foreground">
+										<div>
+											Character count: {promptText.length}
 										</div>
-									)}
+										{hasChanges && (
+											<div className="text-amber-600">
+												Unsaved changes
+											</div>
+										)}
+									</div>
 								</div>
 							</div>
 						)}
