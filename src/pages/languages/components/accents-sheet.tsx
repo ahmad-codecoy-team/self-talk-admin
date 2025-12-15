@@ -77,7 +77,7 @@ export function AccentsSheet({
 					</SheetDescription>
 				</SheetHeader>
 				
-				<div className="mt-6 flex flex-col flex-1 min-h-0">
+				<div className="mt-6 flex flex-col flex-1 min-h-0 px-4">
 					{/* Add New Accent */}
 					<div className="flex gap-2 items-end mb-6">
 						<div className="grid w-full gap-1.5">

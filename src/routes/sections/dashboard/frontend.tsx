@@ -24,8 +24,9 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		// Customer Support
 		{ path: "customer-support", element: Component("/pages/customer-support") },
 
-		// Global Prompt
+		// Global Prompt now called agent-settings
 		{ path: "global-prompt", element: Component("/pages/global-prompt") },
+		{ path: "agent-settings", element: Component("/pages/global-prompt") },
 
 		// Languages
 		{ path: "languages", element: Component("/pages/languages") },

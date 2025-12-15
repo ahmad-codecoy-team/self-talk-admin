@@ -22,7 +22,7 @@ export const frontendNavData: NavProps["data"] = [
 			},
 			{
 				title: "Agent Settings",
-				path: "/global-prompt",
+				path: "/agent-settings",
 				icon: <Icon icon="lucide:message-square" size="24" />,
 			},
 			{
