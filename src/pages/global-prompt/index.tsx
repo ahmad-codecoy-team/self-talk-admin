@@ -8,6 +8,8 @@ import { Textarea } from "@/ui/textarea";
 import { Separator } from "@/ui/separator";
 import { Badge } from "@/ui/badge";
 import { ScrollArea } from "@/ui/scroll-area";
+import { Input } from "@/ui/input";
+import { Label } from "@/ui/label";
 
 // React Query keys
 const QUERY_KEYS = {
@@ -16,6 +18,8 @@ const QUERY_KEYS = {
 
 export default function GlobalPromptPage() {
 	const [promptText, setPromptText] = useState("");
+	const [llmModal, setLlmModal] = useState("");
+	const [ttsModal, setTtsModal] = useState("");
 	const [isEditing, setIsEditing] = useState(false);
 	const [hasChanges, setHasChanges] = useState(false);
 
@@ -55,44 +59,78 @@ export default function GlobalPromptPage() {
 
 	// Initialize prompt text when data loads
 	useEffect(() => {
-		if (promptData?.prompt?.prompt) {
-			setPromptText(promptData.prompt.prompt);
+		if (promptData?.prompt) {
+			setPromptText(promptData.prompt.prompt || "");
+			setLlmModal(promptData.prompt.llmModal || "");
+			setTtsModal(promptData.prompt.ttsModal || "");
 		} else {
 			setPromptText("");
+			setLlmModal("");
+			setTtsModal("");
 			setIsEditing(true); // Auto-start editing if no prompt exists
 		}
 	}, [promptData]);
 
 	// Check for changes
 	useEffect(() => {
-		const originalText = promptData?.prompt?.prompt || "";
-		setHasChanges(promptText !== originalText);
-	}, [promptText, promptData]);
+		const originalPrompt = promptData?.prompt?.prompt || "";
+		const originalLlm = promptData?.prompt?.llmModal || "";
+		const originalTts = promptData?.prompt?.ttsModal || "";
+
+		const changed =
+			promptText !== originalPrompt ||
+			llmModal !== originalLlm ||
+			ttsModal !== originalTts;
+			
+		setHasChanges(changed);
+	}, [promptText, llmModal, ttsModal, promptData]);
 
 	// Handle save
 	const handleSave = () => {
 		const trimmedText = promptText.trim();
+		const trimmedLlm = llmModal.trim();
+		const trimmedTts = ttsModal.trim();
 		
 		if (!trimmedText) {
 			alert("Prompt cannot be empty");
 			return;
 		}
 
+		// Validation for new settings
+		if (!promptData?.prompt?._id) {
+			if (!trimmedLlm || !trimmedTts) {
+				alert("LLM Modal and TTS Modal are required for new settings");
+				return;
+			}
+		}
+
 		if (promptData?.prompt?._id) {
-			// Update existing prompt
-			updatePromptMutation.mutate(trimmedText);
+			// Update existing
+			updatePromptMutation.mutate({
+				prompt: trimmedText,
+				llmModal: trimmedLlm,
+				ttsModal: trimmedTts
+			});
 		} else {
-			// Create new prompt
-			createPromptMutation.mutate(trimmedText);
+			// Create new
+			createPromptMutation.mutate({
+				prompt: trimmedText,
+				llmModal: trimmedLlm,
+				ttsModal: trimmedTts
+			});
 		}
 	};
 
 	// Handle cancel
 	const handleCancel = () => {
-		if (promptData?.prompt?.prompt) {
-			setPromptText(promptData.prompt.prompt);
+		if (promptData?.prompt) {
+			setPromptText(promptData.prompt.prompt || "");
+			setLlmModal(promptData.prompt.llmModal || "");
+			setTtsModal(promptData.prompt.ttsModal || "");
 		} else {
 			setPromptText("");
+			setLlmModal("");
+			setTtsModal("");
 		}
 		setIsEditing(false);
 		setHasChanges(false);
@@ -112,7 +150,7 @@ export default function GlobalPromptPage() {
 			<div className="flex flex-col h-screen overflow-hidden items-center justify-center">
 				<div className="text-center">
 					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-					<p>Loading global prompt...</p>
+					<p>Loading agent settings...</p>
 				</div>
 			</div>
 		);
@@ -123,7 +161,7 @@ export default function GlobalPromptPage() {
 		return (
 			<div className="flex flex-col h-screen overflow-hidden items-center justify-center">
 				<div className="text-center">
-					<p className="text-red-500 mb-4">Failed to load global prompt</p>
+					<p className="text-red-500 mb-4">Failed to load agent settings</p>
 					<Button onClick={() => refetch()}>Try Again</Button>
 				</div>
 			</div>
@@ -142,9 +180,9 @@ export default function GlobalPromptPage() {
 						<div className="flex items-center gap-3">
 							<MessageSquare className="h-8 w-8 text-primary" />
 							<div>
-								<h1 className="text-2xl font-bold">Global Prompt</h1>
+								<h1 className="text-2xl font-bold">Agent Settings</h1>
 								<p className="text-sm text-muted-foreground">
-									Manage the global AI assistant prompt for your application
+									Manage the agent settings and prompt for your application
 								</p>
 							</div>
 						</div>
@@ -201,7 +239,7 @@ export default function GlobalPromptPage() {
 					<CardHeader className="flex-shrink-0 pb-4">
 						<div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
 							<CardTitle className="text-lg font-medium">
-								{isNewPrompt ? "Create New Prompt" : "Current Global Prompt"}
+								{isNewPrompt ? "Create New Settings" : "Current Agent Settings"}
 							</CardTitle>
 							
 							{!isEditing ? (
@@ -211,7 +249,7 @@ export default function GlobalPromptPage() {
 									className="flex items-center gap-2"
 								>
 									<Edit className="h-4 w-4" />
-									Edit Prompt
+									Edit Settings
 								</Button>
 							) : (
 								<div className="flex items-center gap-2">
@@ -232,7 +270,7 @@ export default function GlobalPromptPage() {
 										) : (
 											<Save className="h-4 w-4" />
 										)}
-										{isNewPrompt ? "Create Prompt" : "Save Changes"}
+										{isNewPrompt ? "Create Settings" : "Save Changes"}
 									</Button>
 								</div>
 							)}
@@ -244,13 +282,26 @@ export default function GlobalPromptPage() {
 							// Display Mode
 							<div className="flex-1 flex flex-col min-h-0 p-6">
 								{promptText ? (
-									<div className="flex-1 flex flex-col space-y-4 min-h-0">
-										<div className="flex-1 p-4 bg-muted/30 rounded-lg border overflow-hidden">
-											<ScrollArea className="h-full">
-												<pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed pr-4">
-													{promptText}
-												</pre>
-											</ScrollArea>
+									<div className="flex-1 flex flex-col space-y-6 min-h-0">
+										<div className="grid grid-cols-2 gap-4">
+											<div>
+												<div className="text-sm font-medium text-muted-foreground mb-1">LLM Modal</div>
+												<div className="text-sm font-mono bg-muted/30 p-2 rounded border">{llmModal || "Not set"}</div>
+											</div>
+											<div>
+												<div className="text-sm font-medium text-muted-foreground mb-1">TTS Modal</div>
+												<div className="text-sm font-mono bg-muted/30 p-2 rounded border">{ttsModal || "Not set"}</div>
+											</div>
+										</div>
+										<div>
+											<div className="text-sm font-medium text-muted-foreground mb-2">System Prompt</div>
+											<div className="p-4 bg-muted/30 rounded-lg border overflow-hidden h-64">
+												<ScrollArea className="h-full">
+													<pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed pr-4">
+														{promptText}
+													</pre>
+												</ScrollArea>
+											</div>
 										</div>
 										<div className="flex-shrink-0 text-xs text-muted-foreground">
 											Character count: {promptText.length}
@@ -261,13 +312,13 @@ export default function GlobalPromptPage() {
 										<div className="text-center space-y-4">
 											<MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
 											<div className="space-y-2">
-												<h3 className="text-lg font-medium">No Global Prompt Set</h3>
+												<h3 className="text-lg font-medium">No Agent Settings Set</h3>
 												<p className="text-sm text-muted-foreground max-w-sm">
-													Create a global prompt to provide consistent AI assistant behavior across your application.
+													Create agent settings to provide consistent AI assistant behavior across your application.
 												</p>
 											</div>
 											<Button onClick={handleEdit} className="mt-4">
-												Create Global Prompt
+												Create Agent Settings
 											</Button>
 										</div>
 									</div>
@@ -276,15 +327,39 @@ export default function GlobalPromptPage() {
 						) : (
 							// Edit Mode
 							<div className="flex-1 flex flex-col min-h-0 p-6">
-								<div className="flex-1 flex flex-col space-y-4 min-h-0">
-									<div className="flex-1 min-h-0 relative">
-										<Textarea
-											value={promptText}
-											onChange={(e) => setPromptText(e.target.value)}
-											placeholder="Enter your global AI assistant prompt here..."
-											className="absolute inset-0 w-full h-full resize-none font-mono text-sm leading-relaxed border rounded-md p-3 focus:ring-2 focus:ring-primary focus:border-transparent overflow-auto"
-											autoFocus
-										/>
+								<div className="flex-1 flex flex-col space-y-6 min-h-0">
+									<div className="grid grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label htmlFor="llmModal">LLM Modal</Label>
+											<Input
+												id="llmModal"
+												value={llmModal}
+												onChange={(e) => setLlmModal(e.target.value)}
+												placeholder="e.g. gpt-4o"
+											/>
+										</div>
+										<div className="space-y-2">
+											<Label htmlFor="ttsModal">TTS Modal</Label>
+											<Input
+												id="ttsModal"
+												value={ttsModal}
+												onChange={(e) => setTtsModal(e.target.value)}
+												placeholder="e.g. eleven-labs"
+											/>
+										</div>
+									</div>
+									<div className="space-y-2 flex-1 flex flex-col min-h-0">
+										<Label htmlFor="prompt">System Prompt</Label>
+										<div className="flex-1 min-h-0 relative">
+											<Textarea
+												id="prompt"
+												value={promptText}
+												onChange={(e) => setPromptText(e.target.value)}
+												placeholder="Enter your global AI assistant prompt here..."
+												className="absolute inset-0 w-full h-full resize-none font-mono text-sm leading-relaxed border rounded-md p-3 focus:ring-2 focus:ring-primary focus:border-transparent overflow-auto"
+												autoFocus
+											/>
+										</div>
 									</div>
 									<div className="flex-shrink-0 flex justify-between items-center text-xs text-muted-foreground">
 										<div>

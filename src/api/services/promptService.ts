@@ -3,6 +3,8 @@ import apiClient from "../apiClient";
 export interface Prompt {
 	_id: string;
 	prompt: string;
+	llmModal?: string;
+	ttsModal?: string;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -12,10 +14,14 @@ export interface PromptResponse {
 }
 
 // Create a new prompt
-const createPrompt = async (promptText: string): Promise<PromptResponse> => {
+const createPrompt = async (data: {
+	prompt: string;
+	llmModal: string;
+	ttsModal: string;
+}): Promise<PromptResponse> => {
 	return apiClient.post<PromptResponse>({
 		url: "/admin/prompt",
-		data: { prompt: promptText },
+		data,
 	});
 };
 
@@ -27,10 +33,14 @@ const getPrompt = async (): Promise<PromptResponse> => {
 };
 
 // Update the current prompt
-const updatePrompt = async (promptText: string): Promise<PromptResponse> => {
+const updatePrompt = async (data: {
+	prompt?: string;
+	llmModal?: string;
+	ttsModal?: string;
+}): Promise<PromptResponse> => {
 	return apiClient.put<PromptResponse>({
-		url: "/admin/prompt", 
-		data: { prompt: promptText },
+		url: "/admin/prompt",
+		data,
 	});
 };
 

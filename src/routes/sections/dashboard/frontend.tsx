@@ -27,6 +27,9 @@ export function getFrontendDashboardRoutes(): RouteObject[] {
 		// Global Prompt
 		{ path: "global-prompt", element: Component("/pages/global-prompt") },
 
+		// Languages
+		{ path: "languages", element: Component("/pages/languages") },
+
 		// Reusable components showcase (kept for development reference)
 		{
 			path: "components",

@@ -21,9 +21,14 @@ export const frontendNavData: NavProps["data"] = [
 				icon: <Icon icon="lucide:users" size="24" />,
 			},
 			{
-				title: "Global Prompt",
+				title: "Agent Settings",
 				path: "/global-prompt",
 				icon: <Icon icon="lucide:message-square" size="24" />,
+			},
+			{
+				title: "Languages",
+				path: "/languages",
+				icon: <Icon icon="lucide:globe" size="24" />,
 			},
 			{
 				title: "Notifications",
