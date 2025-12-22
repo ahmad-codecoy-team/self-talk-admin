@@ -33,6 +33,8 @@ export interface ApiUser {
 		__v: number;
 	};
 	is_suspended: boolean;
+	lastAccess?: string; // NEW: Last access timestamp
+	comped?: boolean; // NEW: Comped user flag
 	createdAt: string;
 	updatedAt: string;
 }
@@ -73,6 +75,7 @@ export interface FrontendUser {
 	status: string;
 	joinDate: string;
 	lastActive: string;
+	lastAccess?: string; // NEW: Last access timestamp
 	minutesUsed: number;
 	minutesTotal: number;
 	subscription: {
@@ -100,9 +103,50 @@ export interface FrontendUser {
 	};
 }
 
+// Bulk action types
+export interface BulkActionRequest {
+	userIds: string[];
+	action: 'suspend' | 'unsuspend' | 'delete';
+}
+
+export interface BulkActionResult {
+	userId: string;
+	action: string;
+	success: boolean;
+	user?: ApiUser;
+	error?: string;
+}
+
+export interface BulkActionResponse {
+	success: boolean;
+	message: string;
+	data: {
+		results: BulkActionResult[];
+		successful?: number;
+		failed?: number;
+	};
+totalProcessed: number;
+
+}
+
+// Buy subscription types
+export interface BuySubscriptionRequest {
+	userId: string;
+	name: 'Free' | 'Premium' | 'Super';
+}
+
+export interface BuySubscriptionResponse {
+	success: boolean;
+	message: string;
+	user: ApiUser;
+	}
+
 export enum AdminUsersApi {
 	GetUsers = "/admin/users",
 	ToggleSuspension = "/admin/users/suspension",
+	DeleteElevenLabsData = "/admin/users", // /:id/elevenlabs
+	BulkActions = "/admin/users/bulk-actions",
+	BuySubscription = "/admin/users/buy-subscription",
 }
 
 // Generate random avatar background colors
@@ -186,12 +230,16 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 	// planName already computed above
 	const planPrice = apiUser.current_subscription?.price || 0;
 
-	// Status mapping
-	const status = apiUser.is_suspended ? "Suspended" : "Active";
+	// Status mapping - show both suspended/active and comped status
+	let status = apiUser.is_suspended ? "Suspended" : "Active";
+	if (apiUser.comped) {
+		status = `${status} (Comped)`;
+	}
 
 	// Date formatting
 	const joinDate = new Date(apiUser.createdAt).toISOString().split("T")[0];
 	const lastActive = new Date(apiUser.updatedAt).toISOString().split("T")[0];
+	const lastAccess = apiUser.lastAccess ? new Date(apiUser.lastAccess).toISOString() : undefined;
 
 	// Static payment method for now
 	const paymentMethod = planPrice > 0
@@ -233,6 +281,7 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 		status,
 		joinDate,
 		lastActive,
+		lastAccess,
 		minutesUsed,
 		minutesTotal: total ?? 0,
 		subscription,
@@ -242,7 +291,7 @@ export const transformApiUserToFrontendUser = (apiUser: ApiUser): FrontendUser =
 // API service functions
 const getUsers = async (
 	page: number = 1,
-	limit: number = 10,
+	limit: number = 200,
 ): Promise<{
 	users: FrontendUser[];
 	meta: { total: number; limit: number; totalPages: number; currentPage: number };
@@ -266,15 +315,39 @@ const toggleUserSuspension = async (userId: string): Promise<FrontendUser> => {
 		url: `${AdminUsersApi.ToggleSuspension}/${userId}`,
 	});
 
+	console.log("Response form toogle user suspension service",response);
+
 	return transformApiUserToFrontendUser(response.user);
 };
 
-// Get single user by ID - for now, we'll get it from the users list
-// until we have a dedicated single user endpoint
+// Get single user by ID - improved implementation to handle large user lists
 const getUserById = async (userId: string): Promise<FrontendUser | null> => {
 	try {
-		const response = await getUsers(1, 100); // Get all users
-		const user = response.users.find((u) => u.id === userId);
+		// First, try to get the user from a reasonable page size
+		let page = 1;
+		let found = false;
+		let user: FrontendUser | undefined;
+		
+		// Search through pages until we find the user or exhaust all pages
+		while (!found) {
+			const response = await getUsers(page, 100);
+			user = response.users.find((u) => u.id === userId);
+
+			console.log("Data from getuserbyid service--->",response,user);
+			
+			if (user) {
+				found = true;
+				break;
+			}
+			
+			// If we've reached the last page and still no user found
+			if (page >= response.meta.totalPages) {
+				break;
+			}
+			
+			page++;
+		}
+		
 		return user || null;
 	} catch (error) {
 		console.error("Error fetching user by ID:", error);
@@ -282,8 +355,44 @@ const getUserById = async (userId: string): Promise<FrontendUser | null> => {
 	}
 };
 
+// Delete user's ElevenLabs data
+const deleteUserElevenLabsData = async (userId: string): Promise<FrontendUser> => {
+	const response = await apiClient.delete<{ user: ApiUser }>({
+		url: `${AdminUsersApi.DeleteElevenLabsData}/${userId}/elevenlabs`,
+	});
+
+	return transformApiUserToFrontendUser(response.user);
+};
+
+// Bulk actions for users
+const bulkActions = async (request: BulkActionRequest): Promise<BulkActionResponse> => {
+	const response = await apiClient.post<BulkActionResponse>({
+		url: AdminUsersApi.BulkActions,
+		data: request,
+	});
+
+	console.log("Response from bulk actions--->",response);
+
+	return response;
+};
+
+// Buy subscription for user
+const buySubscription = async (request: BuySubscriptionRequest): Promise<FrontendUser> => {
+	const response = await apiClient.post<BuySubscriptionResponse>({
+		url: AdminUsersApi.BuySubscription,
+		data: request,
+	});
+
+	
+
+	return transformApiUserToFrontendUser(response.user);
+};
+
 export default {
 	getUsers,
 	toggleUserSuspension,
 	getUserById,
+	deleteUserElevenLabsData,
+	bulkActions,
+	buySubscription,
 };

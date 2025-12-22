@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown, Euro, Eye, Search, Shield, ShieldOff, UserCheck, Users } from "lucide-react";
-import { memo, useCallback, useState } from "react";
+import { ArrowUpDown, Calendar, Clock, Crown, Euro, Eye, Filter, Search, Shield, ShieldOff, Trash2, UserCheck, Users } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { FrontendUser } from "@/api/services/adminUsersService";
@@ -11,7 +11,9 @@ import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { ScrollArea } from "@/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Separator } from "@/ui/separator";
+import { Checkbox } from "@/ui/checkbox";
 
 // Base URL for profile pictures
 const PROFILE_PICTURE_BASE_URL = "https://selftalk-backend-yw3r.onrender.com";
@@ -147,26 +149,39 @@ const UserCard = memo(
 
 UserCard.displayName = "UserCard";
 
-// Desktop UserRow component (unchanged but memoized)
+// Desktop UserRow component (updated with new features)
 const UserRow = memo(
 	({
 		user,
 		index,
 		loadingUserId,
+		selectedUsers,
 		onViewUser,
 		onToggleStatus,
+		onDeleteElevenLabs,
+		onSelectUser,
 	}: {
 		user: FrontendUser;
 		index: number;
 		loadingUserId: string | null;
+		selectedUsers: Set<string>;
 		onViewUser: (userId: string) => void;
 		onToggleStatus: (userId: string) => void;
+		onDeleteElevenLabs: (userId: string) => void;
+		onSelectUser: (userId: string, checked: boolean) => void;
 	}) => {
 		return (
 			<tr className={`border-b hover:bg-muted/50 transition-colors ${index % 2 === 0 ? "bg-muted/20" : ""}`}>
-				<td className="py-6 px-6 relative">
-					<div className="flex items-center space-x-3 relative z-0">
-						<Avatar className="h-11 w-11 relative z-0">
+				<td className="py-6 px-3">
+					<Checkbox
+						checked={selectedUsers.has(user.id)}
+						onCheckedChange={(checked) => onSelectUser(user.id, checked as boolean)}
+						aria-label={`Select ${user.name}`}
+					/>
+				</td>
+				<td className="py-6 px-4 relative">
+					<div className="flex items-center space-x-2 relative z-0">
+						<Avatar className="h-9 w-9 relative z-0">
 							<AvatarImage src={getProfilePictureUrl(user.avatar)} alt={user.name} className="object-cover" />
 							<AvatarFallback className={`text-xs font-medium text-white ${getAvatarBgColor(user.id)}`}>
 								{user.name
@@ -183,20 +198,20 @@ const UserRow = memo(
 						</div>
 					</div>
 				</td>
-				<td className="py-6 px-6">
+				<td className="py-6 px-3">
 					<Badge variant={getPlanBadgeVariant(user.plan)} className="text-xs">
 						{user.plan}
 					</Badge>
 				</td>
-				<td className="py-6 px-6">
+				<td className="py-6 px-3">
 					<Badge variant={getStatusBadgeVariant(user.status)} className="text-xs">
 						{user.status}
 					</Badge>
 				</td>
-				<td className="py-6 px-6">
-					<div className="space-y-2 min-w-24">
+				<td className="py-6 px-3">
+					<div className="space-y-1 w-full">
 						<div className="text-xs font-medium">
-							{user.minutesUsed}/{user.minutesTotal} min
+							{user.minutesUsed.toFixed(1)}/{user.minutesTotal}
 						</div>
 						<div className="w-full bg-muted rounded-full h-1.5">
 							<div
@@ -206,44 +221,67 @@ const UserRow = memo(
 						</div>
 					</div>
 				</td>
-				<td className="py-6 px-6 text-xs text-muted-foreground">
+				<td className="py-6 px-3 text-xs text-muted-foreground">
 					{new Date(user.joinDate).toLocaleDateString("en-US", {
 						month: "short",
 						day: "numeric",
 						year: "numeric",
 					})}
 				</td>
-				<td className="py-6 px-6 min-w-[180px]">
-					<div className="flex items-center gap-1.5 w-full">
+				<td className="py-6 px-3 text-xs text-muted-foreground">
+					{user.lastAccess ? (
+						new Date(user.lastAccess).toLocaleDateString("en-US", {
+							month: "short",
+							day: "numeric",
+							year: "numeric",
+						})
+					) : (
+						new Date().toLocaleDateString("en-US", {
+							month: "short",
+							day: "numeric",
+							year: "numeric",
+						})
+					)}
+				</td>
+				<td className="py-6 px-3">
+					<div className="flex items-center gap-1 w-full">
 						<Button
 							variant="outline"
 							size="sm"
-							className="h-7 px-2 text-xs hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 flex-shrink-0"
+							className="h-7 w-7 p-0 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 flex-shrink-0"
 							title="View Details"
 							onClick={() => onViewUser(user.id)}
 						>
-							<Eye className="h-3 w-3 mr-1" />
-							View
+							<Eye className="h-3 w-3" />
 						</Button>
 						<Button
 							variant="outline"
 							size="sm"
-							className={`h-7 px-2 text-xs transition-colors flex-shrink-0 ${
-								user.status === "Active"
+							className={`h-7 w-7 p-0 transition-colors flex-shrink-0 ${
+								user.status === "Active" || user.status === "Active (Comped)"
 									? "hover:bg-red-50 hover:text-red-600 hover:border-red-200"
 									: "hover:bg-green-50 hover:text-green-600 hover:border-green-200"
 							}`}
 							onClick={() => onToggleStatus(user.id)}
 							disabled={loadingUserId === user.id}
-							title={user.status === "Active" ? "Suspend User" : "Activate User"}
+							title={user.status === "Active" || user.status === "Active (Comped)" ? "Suspend User" : "Activate User"}
 						>
 							{loadingUserId === user.id ? (
 								<div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-							) : user.status === "Active" ? (
+							) : user.status === "Active" || user.status === "Active (Comped)" ? (
 								<ShieldOff className="h-3 w-3" />
 							) : (
 								<Shield className="h-3 w-3" />
 							)}
+						</Button>
+						<Button
+							variant="destructive"
+							size="sm"
+							className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-700 hover:border-red-300 flex-shrink-0"
+							title="Delete ElevenLabs Data"
+							onClick={() => onDeleteElevenLabs(user.id)}
+						>
+							<Trash2 className="h-3 w-3" />
 						</Button>
 					</div>
 				</td>
@@ -269,14 +307,12 @@ const getPlanBadgeVariant = (plan: string) => {
 };
 
 const getStatusBadgeVariant = (status: string) => {
-	switch (status) {
-		case "Active":
-			return "default" as const;
-		case "Suspended":
-			return "destructive" as const;
-		default:
-			return "secondary" as const;
+	if (status.includes("Suspended")) {
+		return "destructive" as const;
+	} else if (status.includes("Active")) {
+		return "default" as const;
 	}
+	return "secondary" as const;
 };
 
 // Get complete profile picture URL
@@ -318,6 +354,15 @@ export default function UsersPage() {
 	const queryClient = useQueryClient();
 	const [searchTerm, setSearchTerm] = useState("");
 	const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
+	
+	// Filter states
+	const [statusFilter, setStatusFilter] = useState<string>("all");
+	const [planFilter, setPlanFilter] = useState<string>("all");
+	const [sortBy, setSortBy] = useState<string>("name");
+	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+	const [inactivityFilter, setInactivityFilter] = useState<string>("all");
+	const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+	const [showBulkActions, setShowBulkActions] = useState(false);
 
 	// Fetch users with React Query
 	const {
@@ -326,16 +371,72 @@ export default function UsersPage() {
 		error,
 	} = useQuery({
 		queryKey: QUERY_KEYS.users,
-		queryFn: () => adminUsersService.getUsers(1, 100), // Get first 100 users
+		queryFn: () => adminUsersService.getUsers(1, 200), // Get first 200 users
 	});
 
 	const users = usersData?.users || [];
+	// console.log("Users data fetched from index users page---->",usersData);
 
-	const filteredUsers = users.filter(
-		(user) =>
-			user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.email.toLowerCase().includes(searchTerm.toLowerCase()),
-	);
+	// Helper function to calculate days since last access
+	const getDaysSinceLastAccess = (user: FrontendUser) => {
+		const lastAccess = user.lastAccess || user.lastActive;
+		if (!lastAccess) return 0;
+		const lastAccessDate = new Date(lastAccess);
+		const today = new Date();
+		const diffTime = Math.abs(today.getTime() - lastAccessDate.getTime());
+		return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+	};
+
+	// Filter and sort users
+	const filteredUsers = useMemo(() => {
+		let filtered = users.filter((user) => {
+			// Text search
+			const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+				user.email.toLowerCase().includes(searchTerm.toLowerCase());
+			
+			// Status filter
+			const matchesStatus = statusFilter === "all" || 
+				(statusFilter === "active" && (user.status === "Active" || user.status === "Active (Comped)") ) ||
+				(statusFilter === "suspended" && user.status === "Suspended");
+			
+			// Plan filter
+			const matchesPlan = planFilter === "all" ||
+				(planFilter === "free" && user.plan === "Free") ||
+				(planFilter === "premium" && user.plan === "Premium") ||
+				(planFilter === "super" && user.plan === "Super");
+			
+			// Inactivity filter
+			let matchesInactivity = true;
+			if (inactivityFilter !== "all") {
+				const daysSinceLastAccess = getDaysSinceLastAccess(user);
+				const threshold = parseInt(inactivityFilter);
+				matchesInactivity = daysSinceLastAccess >= threshold;
+			}
+			
+			return matchesSearch && matchesStatus && matchesPlan && matchesInactivity;
+		});
+
+		// Sort users
+		filtered.sort((a, b) => {
+			let aValue: any = a[sortBy as keyof FrontendUser];
+			let bValue: any = b[sortBy as keyof FrontendUser];
+			
+			// Handle special sorting cases
+			if (sortBy === "joinDate" || sortBy === "lastAccess") {
+				aValue = new Date(aValue || 0).getTime();
+				bValue = new Date(bValue || 0).getTime();
+			} else if (typeof aValue === 'string') {
+				aValue = aValue.toLowerCase();
+				bValue = bValue.toLowerCase();
+			}
+			
+			if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
+			if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
+			return 0;
+		});
+
+		return filtered;
+	}, [users, searchTerm, statusFilter, planFilter, inactivityFilter, sortBy, sortOrder]);
 
 	// Toggle user suspension mutation
 	const toggleSuspensionMutation = useMutation({
@@ -345,8 +446,9 @@ export default function UsersPage() {
 		},
 		onSuccess: (updatedUser) => {
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users });
-			const action = updatedUser.status === "Suspended" ? "suspended" : "activated";
-			if (updatedUser.status === "Suspended") {
+			console.log("Updated user status from users index file--->",updatedUser);
+			const action = updatedUser.status === "Suspended" || "Suspended (Comped)" ? "suspended" : "activated";
+			if (updatedUser.status === "Suspended" || updatedUser.status === "Suspended (Comped)") {
 				toast.error(`${updatedUser.name} has been ${action}`);
 			} else {
 				toast.success(`${updatedUser.name} has been ${action}`);
@@ -357,6 +459,40 @@ export default function UsersPage() {
 		},
 		onSettled: () => {
 			setLoadingUserId(null);
+		},
+	});
+
+	// Delete user ElevenLabs data mutation
+	const deleteElevenLabsMutation = useMutation({
+		mutationFn: adminUsersService.deleteUserElevenLabsData,
+		onSuccess: (updatedUser) => {
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users });
+			toast.success(`${updatedUser.name}'s ElevenLabs data has been deleted`);
+		},
+		onError: (error: Error) => {
+			toast.error(error.message || "Failed to delete ElevenLabs data");
+		},
+	});
+
+	// Bulk actions mutation
+	const bulkActionsMutation = useMutation({
+		mutationFn: adminUsersService.bulkActions,
+		onSuccess: (response) => {
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users });
+			setSelectedUsers(new Set());
+			setShowBulkActions(false);
+			
+			// const { successful = 0, failed = 0, totalProcessed } = response.data;
+			const { totalProcessed } = response;
+			if (!totalProcessed || totalProcessed===0) {
+				toast.error(`Total Processed: ${totalProcessed}`);
+			} else {
+				toast.success(`Bulk action completed successfully: ${totalProcessed} users processed`);
+			}
+			// toast.success(`Bulk action completed successfully: ${totalProcessed} users processed`);
+		},
+		onError: (error: Error) => {
+			toast.error(error.message || "Failed to perform bulk action");
 		},
 	});
 
@@ -375,8 +511,54 @@ export default function UsersPage() {
 		[toggleSuspensionMutation],
 	);
 
+	const handleDeleteElevenLabs = useCallback(
+		(userId: string) => {
+			deleteElevenLabsMutation.mutate(userId);
+		},
+		[deleteElevenLabsMutation],
+	);
+
+	const handleSelectUser = useCallback((userId: string, checked: boolean) => {
+		setSelectedUsers(prev => {
+			const newSet = new Set(prev);
+			if (checked) {
+				newSet.add(userId);
+			} else {
+				newSet.delete(userId);
+			}
+			return newSet;
+		});
+	}, []);
+
+	const handleSelectAll = useCallback((checked: boolean) => {
+		if (checked) {
+			setSelectedUsers(new Set(filteredUsers.map(u => u.id)));
+		} else {
+			setSelectedUsers(new Set());
+		}
+	}, [filteredUsers]);
+
+	const handleBulkAction = useCallback((action: 'suspend' | 'unsuspend' | 'delete') => {
+		if (selectedUsers.size === 0) {
+			toast.error("Please select users first");
+			return;
+		}
+
+		const userIds = Array.from(selectedUsers);
+		bulkActionsMutation.mutate({ userIds, action });
+	}, [selectedUsers, bulkActionsMutation]);
+
+	const handleSortChange = useCallback((field: string) => {
+		if (sortBy === field) {
+			setSortOrder(prev => prev === "asc" ? "desc" : "asc");
+		} else {
+			setSortBy(field);
+			setSortOrder("asc");
+		}
+	}, [sortBy]);
+
 const totalRevenue = users
-		.filter((u) => u.subscription && u.subscription.packageSnapshot.price > 0 && u.status === "Active")
+		.filter((u) => u.subscription && u.subscription.packageSnapshot.price > 0 && (u.status === "Active" || u.status === "Active (Comped)"))
 		.reduce((sum, u) => sum + (u.subscription?.packageSnapshot.price || 0), 0);
 
 	// Show loading state
@@ -430,7 +612,7 @@ const totalRevenue = users
 						<div className="flex items-center justify-between">
 							<div className="space-y-1">
 								<p className="text-sm font-medium text-muted-foreground">Active Users</p>
-								<p className="text-2xl font-semibold">{users.filter((u) => u.status === "Active").length}</p>
+								<p className="text-2xl font-semibold">{users.filter((u) => u.status === "Active" || u.status === "Active (Comped)").length}</p>
 							</div>
 							<UserCheck className="h-8 w-8 text-muted-foreground" />
 						</div>
@@ -464,17 +646,124 @@ const totalRevenue = users
 			<div className="flex-1 flex flex-col min-h-0 mx-6 mb-6">
 				<Card className="flex-1 flex flex-col min-h-0">
 					<CardHeader className="flex-shrink-0 pb-4">
-						<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-							<CardTitle className="text-lg font-medium">All Users ({filteredUsers.length})</CardTitle>
-							<div className="relative w-full md:w-72">
-								<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-								<Input
-									placeholder="Search users by name or email..."
-									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
-									className="pl-10"
-								/>
+						<div className="space-y-4">
+							<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+								<CardTitle className="text-lg font-medium">All Users ({filteredUsers.length})</CardTitle>
+								<div className="relative w-full md:w-72">
+									<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+									<Input
+										placeholder="Search users by name or email..."
+										value={searchTerm}
+										onChange={(e) => setSearchTerm(e.target.value)}
+										className="pl-10"
+									/>
+								</div>
 							</div>
+							
+							{/* Filters Row */}
+							<div className="flex flex-wrap gap-3 items-center">
+								<div className="flex items-center gap-2">
+									<Filter className="h-4 w-4 text-muted-foreground" />
+									<span className="text-sm font-medium">Filters:</span>
+								</div>
+								
+								<Select value={statusFilter} onValueChange={setStatusFilter}>
+									<SelectTrigger className="w-32">
+										<SelectValue placeholder="Status" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">All Status</SelectItem>
+										<SelectItem value="active">Active</SelectItem>
+										<SelectItem value="suspended">Suspended</SelectItem>
+									</SelectContent>
+								</Select>
+								
+								<Select value={planFilter} onValueChange={setPlanFilter}>
+									<SelectTrigger className="w-32">
+										<SelectValue placeholder="Plan" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">All Plans</SelectItem>
+										<SelectItem value="free">Free</SelectItem>
+										<SelectItem value="premium">Premium</SelectItem>
+										<SelectItem value="super">Super</SelectItem>
+									</SelectContent>
+								</Select>
+								
+								<Select value={inactivityFilter} onValueChange={setInactivityFilter}>
+									<SelectTrigger className="w-40">
+										<SelectValue placeholder="Inactivity" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">All Users</SelectItem>
+										<SelectItem value="30">30+ days inactive</SelectItem>
+										<SelectItem value="60">60+ days inactive</SelectItem>
+										<SelectItem value="90">90+ days inactive</SelectItem>
+									</SelectContent>
+								</Select>
+								
+								<div className="flex items-center gap-2 ml-auto">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setShowBulkActions(!showBulkActions)}
+										disabled={selectedUsers.size === 0}
+										className="gap-2"
+									>
+										<Users className="h-4 w-4" />
+										Bulk Actions ({selectedUsers.size})
+									</Button>
+								</div>
+							</div>
+							
+							{/* Bulk Actions Panel */}
+							{showBulkActions && selectedUsers.size > 0 && (
+								<div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
+									<span className="text-sm font-medium">
+										{selectedUsers.size} user(s) selected:
+									</span>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => handleBulkAction('suspend')}
+										disabled={bulkActionsMutation.isPending}
+										className="gap-1"
+									>
+										<Shield className="h-3 w-3" />
+										Suspend
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => handleBulkAction('unsuspend')}
+										disabled={bulkActionsMutation.isPending}
+										className="gap-1"
+									>
+										<UserCheck className="h-3 w-3" />
+										Unsuspend
+									</Button>
+									<Button
+										variant="destructive"
+										size="sm"
+										onClick={() => handleBulkAction('delete')}
+										disabled={bulkActionsMutation.isPending}
+										className="gap-1"
+									>
+										<Trash2 className="h-3 w-3" />
+										Delete
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => {
+											setSelectedUsers(new Set());
+											setShowBulkActions(false);
+										}}
+									>
+										Cancel
+									</Button>
+								</div>
+							)}
 						</div>
 					</CardHeader>
 					<Separator />
@@ -494,16 +783,51 @@ const totalRevenue = users
 							</div>
 
 							{/* Desktop Table Layout */}
-							<div className="hidden md:block min-w-full">
-								<table className="w-full">
+							<div className="hidden md:block overflow-x-auto">
+								<div className="min-w-[1000px]">
+									<table className="w-full">
 									<thead className="sticky top-0 bg-background border-b z-10">
 										<tr>
-											<th className="text-left py-5 px-6 font-medium text-sm">User</th>
-											<th className="text-left py-5 px-6 font-medium text-sm">Plan</th>
-											<th className="text-left py-5 px-6 font-medium text-sm">Status</th>
-											<th className="text-left py-5 px-6 font-medium text-sm">Usage</th>
-											<th className="text-left py-5 px-6 font-medium text-sm">Joined</th>
-											<th className="text-left py-5 px-6 font-medium text-sm min-w-[180px]">Actions</th>
+											<th className="py-5 px-3 w-8">
+												<Checkbox
+													checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+													onCheckedChange={handleSelectAll}
+													aria-label="Select all users"
+												/>
+											</th>
+											<th className="text-left py-5 px-4 font-medium text-sm w-[200px]">
+												<button
+													className="flex items-center gap-1 hover:text-primary"
+													onClick={() => handleSortChange('name')}
+												>
+													User
+													<ArrowUpDown className="h-3 w-3" />
+												</button>
+											</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[80px]">Plan</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[90px]">Status</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[100px]">Usage</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[110px]">
+												<button
+													className="flex items-center gap-1 hover:text-primary"
+													onClick={() => handleSortChange('joinDate')}
+												>
+													<Calendar className="h-3 w-3" />
+													Joined
+													<ArrowUpDown className="h-3 w-3" />
+												</button>
+											</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[110px]">
+												<button
+													className="flex items-center gap-1 hover:text-primary"
+													onClick={() => handleSortChange('lastAccess')}
+												>
+													<Clock className="h-3 w-3" />
+													Last Access
+													<ArrowUpDown className="h-3 w-3" />
+												</button>
+											</th>
+											<th className="text-left py-5 px-3 font-medium text-sm w-[140px]">Actions</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -513,12 +837,16 @@ const totalRevenue = users
 												user={user}
 												index={index}
 												loadingUserId={loadingUserId}
+												selectedUsers={selectedUsers}
 												onViewUser={handleViewUser}
 												onToggleStatus={handleToggleStatus}
+												onDeleteElevenLabs={handleDeleteElevenLabs}
+												onSelectUser={handleSelectUser}
 											/>
 										))}
 									</tbody>
-								</table>
+									</table>
+								</div>
 							</div>
 						</ScrollArea>
 					</CardContent>

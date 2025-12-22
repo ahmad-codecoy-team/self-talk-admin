@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, ArrowLeft, Calendar, Clock, Crown, Shield, ShieldOff } from "lucide-react";
+import { Activity, ArrowLeft, Calendar, Clock, Crown, CreditCard, Shield, ShieldOff } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import adminUsersService from "@/api/services/adminUsersService";
@@ -7,6 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/ui/dialog";
 
 // Base URL for profile pictures (same as in users index)
 const PROFILE_PICTURE_BASE_URL = "https://selftalk-backend-yw3r.onrender.com";
@@ -64,16 +67,24 @@ export default function UserDetailPage() {
 	const { userId } = useParams();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	
+	// Buy subscription state
+	const [selectedPlan, setSelectedPlan] = useState<'Premium' | 'Super'>('Premium');
+	const [buyDialogOpen, setBuyDialogOpen] = useState(false);
 
 	// Fetch user data using React Query
 	const {
 		data: user,
 		isLoading,
 		error,
+		refetch,
 	} = useQuery({
 		queryKey: ["user", userId],
 		queryFn: () => adminUsersService.getUserById(userId || ""),
 		enabled: !!userId,
+		retry: 2,
+		staleTime: 0, // 5 minutes
+		refetchOnWindowFocus: false,
 	});
 
 	// Toggle user suspension mutation
@@ -97,9 +108,48 @@ export default function UserDetailPage() {
 		},
 	});
 
+	// Buy subscription mutation
+	const buySubscriptionMutation = useMutation({
+		mutationFn: adminUsersService.buySubscription,
+		onSuccess: async (updatedUser) => {
+			try {
+				// Close dialog first for better UX
+				setBuyDialogOpen(false);
+				
+				// Update the cached user data immediately with the response
+				queryClient.setQueryData(["user", userId], updatedUser);
+				
+				// Force refetch the current user to get the latest data from server
+				await refetch();
+				
+				// Also invalidate and refetch the users list to keep it in sync
+				await queryClient.invalidateQueries({ queryKey: ["user"] });
+				
+				// Show success message
+				toast.success(`Successfully purchased ${selectedPlan} plan for ${updatedUser.name}`);
+			} catch (refreshError) {
+				console.error("Error refreshing user data after purchase:", refreshError);
+				// Still show success since the purchase was successful
+				toast.success(`Successfully purchased ${selectedPlan} plan for ${updatedUser.name}. Please refresh to see updated details.`);
+			}
+		},
+		onError: (error: Error) => {
+			console.error("Subscription purchase error:", error);
+			toast.error(error.message || "Failed to purchase subscription");
+		},
+	});
+
 	const toggleUserStatus = async () => {
 		if (!user || !userId) return;
 		toggleSuspensionMutation.mutate(userId);
+	};
+
+	const handleBuySubscription = () => {
+		if (!user || !userId) return;
+		buySubscriptionMutation.mutate({
+			userId,
+			name: selectedPlan,
+		});
 	};
 
 	const getPlanBadgeVariant = (plan: string) => {
@@ -116,14 +166,12 @@ export default function UserDetailPage() {
 	};
 
 	const getStatusBadgeVariant = (status: string) => {
-		switch (status) {
-			case "Active":
-				return "default" as const;
-			case "Suspended":
-				return "destructive" as const;
-			default:
-				return "secondary" as const;
+		if (status.includes("Suspended")) {
+			return "destructive" as const;
+		} else if (status.includes("Active")) {
+			return "default" as const;
 		}
+		return "secondary" as const;
 	};
 
 	// Loading state
@@ -175,33 +223,98 @@ export default function UserDetailPage() {
 						<ArrowLeft className="h-5 w-5" />
 						Back to Users
 					</Button>
-					<Button
-						variant="outline"
-						onClick={toggleUserStatus}
-						disabled={toggleSuspensionMutation.isPending}
-						className={`flex items-center gap-2 px-6 py-2 font-medium ${
-							user.status === "Active"
-								? "hover:bg-red-50 hover:text-red-600 hover:border-red-200"
-								: "hover:bg-green-50 hover:text-green-600 hover:border-green-200"
-						}`}
-					>
-						{toggleSuspensionMutation.isPending ? (
-							<>
-								<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-								{user.status === "Active" ? "Suspending..." : "Activating..."}
-							</>
-						) : user.status === "Active" ? (
-							<>
-								<ShieldOff className="h-4 w-4" />
-								Suspend User
-							</>
-						) : (
-							<>
-								<Shield className="h-4 w-4" />
-								Activate User
-							</>
-						)}
-					</Button>
+					<div className="flex items-center gap-3">
+						<Dialog open={buyDialogOpen} onOpenChange={setBuyDialogOpen}>
+							<DialogTrigger asChild>
+								<Button
+									variant="default"
+									className="flex items-center gap-2 px-6 py-2 font-medium bg-primary hover:bg-primary/90"
+								>
+									<CreditCard className="h-4 w-4" />
+									Buy Subscription
+								</Button>
+							</DialogTrigger>
+							<DialogContent className="sm:max-w-md">
+								<DialogHeader>
+									<DialogTitle>Buy Subscription for {user.name}</DialogTitle>
+									<DialogDescription>
+										Select a subscription plan to purchase for this user. Admin can only purchase Premium or Super plans.
+									</DialogDescription>
+								</DialogHeader>
+								<div className="space-y-4 py-4">
+									<div className="space-y-2">
+										<label className="text-sm font-medium">Select Plan</label>
+										<Select value={selectedPlan} onValueChange={(value: 'Premium' | 'Super') => setSelectedPlan(value)}>
+											<SelectTrigger>
+												<SelectValue placeholder="Select a plan" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="Premium">Premium</SelectItem>
+												<SelectItem value="Super">Super</SelectItem>
+											</SelectContent>
+										</Select>
+									</div>
+									<div className="text-sm text-muted-foreground">
+										<p>Current Plan: <strong>{user.plan}</strong></p>
+										<p>This action will immediately update the user's subscription.</p>
+									</div>
+								</div>
+								<DialogFooter>
+									<Button
+										variant="outline"
+										onClick={() => setBuyDialogOpen(false)}
+										disabled={buySubscriptionMutation.isPending}
+									>
+										Cancel
+									</Button>
+									<Button
+										onClick={handleBuySubscription}
+										disabled={buySubscriptionMutation.isPending}
+										className="gap-2"
+									>
+										{buySubscriptionMutation.isPending ? (
+											<>
+												<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+												Purchasing...
+											</>
+										) : (
+											<>
+												<CreditCard className="h-4 w-4" />
+												Purchase {selectedPlan}
+											</>
+										)}
+									</Button>
+								</DialogFooter>
+							</DialogContent>
+						</Dialog>
+						<Button
+							variant="outline"
+							onClick={toggleUserStatus}
+							disabled={toggleSuspensionMutation.isPending}
+							className={`flex items-center gap-2 px-6 py-2 font-medium ${
+								user.status === "Active"
+									? "hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+									: "hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+							}`}
+						>
+							{toggleSuspensionMutation.isPending ? (
+								<>
+									<div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+									{user.status === "Active" ? "Suspending..." : "Activating..."}
+								</>
+							) : user.status === "Active" ? (
+								<>
+									<ShieldOff className="h-4 w-4" />
+									Suspend User
+								</>
+							) : (
+								<>
+									<Shield className="h-4 w-4" />
+									Activate User
+								</>
+							)}
+						</Button>
+					</div>
 				</div>
 
 				{/* User Profile Section */}
@@ -295,54 +408,70 @@ style={{ width: `${user.minutesTotal > 0 ? Math.min((user.minutesUsed / user.min
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="pt-0">
-						<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-							<div className="space-y-3">
-								<p className="text-sm font-medium text-muted-foreground">Plan</p>
-								<p className="text-lg font-semibold">
-									{user.subscription.packageSnapshot.name === "Free" ? "FREE" : user.subscription.packageSnapshot.name}
-								</p>
-							</div>
-
-							<div className="space-y-3">
-								<p className="text-sm font-medium text-muted-foreground">Monthly Cost</p>
-								<p className="text-lg font-semibold">
-									{user.subscription.packageSnapshot.price === 0
-										? "€0,00"
-										: `€${user.subscription.packageSnapshot.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-								</p>
-							</div>
-
-							<div className="space-y-3">
-								<p className="text-sm font-medium text-muted-foreground">Next Billing</p>
-								<p className="text-lg font-semibold">
-									{user.subscription.nextBillingDate
-										? new Date(user.subscription.nextBillingDate).toLocaleDateString("en-US", {
-												month: "short",
-												day: "numeric",
-												year: "numeric",
-											})
-										: "N/A"}
-								</p>
-							</div>
-
-							<div className="space-y-3">
-								<p className="text-sm font-medium text-muted-foreground">Payment Method</p>
-								<div className="space-y-1">
+						{user?.subscription?.packageSnapshot ? (
+							<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+								<div className="space-y-3">
+									<p className="text-sm font-medium text-muted-foreground">Plan</p>
 									<p className="text-lg font-semibold">
-										{user.subscription.paymentMethod
-											? `${user.subscription.paymentMethod.brand.charAt(0).toUpperCase() + user.subscription.paymentMethod.brand.slice(1)} •••• ${user.subscription.paymentMethod.last4}`
-											: "N/A"}
-									</p>
-									<p className="text-xs text-muted-foreground">
-										{user.subscription.packageSnapshot.name === "Free"
-											? "No billing required"
-											: user.subscription.autoRenew
-												? "Auto-renew enabled"
-												: "Auto-renew disabled"}
+										{user.subscription.packageSnapshot.name === "Free" ? "FREE" : user.subscription.packageSnapshot.name}
 									</p>
 								</div>
+
+								<div className="space-y-3">
+									<p className="text-sm font-medium text-muted-foreground">Monthly Cost</p>
+									<p className="text-lg font-semibold">
+										{user.subscription.packageSnapshot.price === 0
+											? "€0,00"
+											: `€${user.subscription.packageSnapshot.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+									</p>
+								</div>
+
+								<div className="space-y-3">
+									<p className="text-sm font-medium text-muted-foreground">Next Billing</p>
+									<p className="text-lg font-semibold">
+										{user.subscription.nextBillingDate
+											? new Date(user.subscription.nextBillingDate).toLocaleDateString("en-US", {
+													month: "short",
+													day: "numeric",
+													year: "numeric",
+												})
+											: "N/A"}
+									</p>
+								</div>
+
+								<div className="space-y-3">
+									<p className="text-sm font-medium text-muted-foreground">Payment Method</p>
+									<div className="space-y-1">
+										<p className="text-lg font-semibold">
+											{user.subscription.paymentMethod
+												? `${user.subscription.paymentMethod.brand.charAt(0).toUpperCase() + user.subscription.paymentMethod.brand.slice(1)} •••• ${user.subscription.paymentMethod.last4}`
+												: "N/A"}
+										</p>
+										<p className="text-xs text-muted-foreground">
+											{user.subscription.packageSnapshot.name === "Free"
+												? "No billing required"
+												: user.subscription.autoRenew
+													? "Auto-renew enabled"
+													: "Auto-renew disabled"}
+										</p>
+									</div>
+								</div>
 							</div>
-						</div>
+						) : user ? (
+							<div className="flex items-center justify-center py-8">
+								<div className="text-center space-y-2">
+									<p className="text-sm text-muted-foreground">No subscription data available</p>
+									<p className="text-xs text-muted-foreground">User may be on a basic plan or subscription data is being updated</p>
+								</div>
+							</div>
+						) : (
+							<div className="flex items-center justify-center py-8">
+								<div className="text-center space-y-2">
+									<div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent mx-auto" />
+									<p className="text-sm text-muted-foreground">Loading subscription details...</p>
+								</div>
+							</div>
+						)}
 					</CardContent>
 				</Card>
 			</div>
