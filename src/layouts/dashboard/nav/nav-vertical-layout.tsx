@@ -39,7 +39,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 			<div className={cn("relative flex items-center py-4 px-2 h-[var(--layout-header-height)] justify-center")}>
 				<div className="flex items-center justify-center mt-4">
 					<div className="transition-transform duration-300 ease-in-out hover:scale-110 hover:rotate-2">
-						<Logo size={180} />
+						<Logo size={themeLayout === ThemeLayout.Vertical ?180:60} />
 					</div>
 				</div>
 
